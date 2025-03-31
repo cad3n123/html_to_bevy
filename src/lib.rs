@@ -83,9 +83,16 @@ fn parse_head(
                     }
                     '#' => {
                         tokens.next();
-                        let struct_name = assert_next_token!(tokens, Ident, Err)
-                            .to_string()
-                            .to_case(Case::Pascal);
+                        let struct_name = {
+                            let mut struct_name =
+                                assert_next_token!(tokens, Ident, Err).to_string();
+                            while tokens.peek().is_some() && !peek_matches_token!(tokens, Group) {
+                                struct_name.push_str(unsafe {
+                                    &tokens.next().unwrap_unchecked().to_string()
+                                });
+                            }
+                            struct_name
+                        };
                         let TokenTree::Group(group) =
                             assert_next_token!(tokens, Group, Delimiter::Brace, Err)
                         else {
@@ -198,13 +205,11 @@ fn parse_tag(
 
     assert_next_token!(tokens, Punct, "<", Err);
     let struct_name = if peek_matches_token!(tokens, Ident) {
-        let struct_name = unsafe {
-            tokens
-                .next()
-                .unwrap_unchecked()
-                .to_string()
-                .to_case(Case::Pascal)
-        };
+        let mut struct_name = unsafe { tokens.next().unwrap_unchecked().to_string() };
+        while tokens.peek().is_some() && !peek_matches_token!(tokens, Punct, ">") {
+            struct_name.push_str(unsafe { &tokens.next().unwrap_unchecked().to_string() });
+        }
+        struct_name = struct_name.to_case(Case::Pascal);
         struct_names.push(struct_name.clone());
         Some(struct_name)
     } else {
@@ -242,10 +247,16 @@ fn parse_tag(
         assert_next_token!(tokens, Punct, "<", Err);
         assert_next_token!(tokens, Punct, "/", Err);
         if peek_matches_token!(tokens, Ident) {
-            let tag = unsafe { tokens.next().unwrap_unchecked() };
+            let tag = {
+                let mut tag = unsafe { tokens.next().unwrap_unchecked().to_string() };
+                while tokens.peek().is_some() && !peek_matches_token!(tokens, Punct, ">") {
+                    tag.push_str(unsafe { &tokens.next().unwrap_unchecked().to_string() });
+                }
+                tag.to_case(Case::Pascal)
+            };
             if struct_name
                 .clone()
-                .is_none_or(|struct_name| tag.to_string().to_case(Case::Pascal) != struct_name)
+                .is_none_or(|struct_name| tag != struct_name)
             {
                 return Err(format_compile_error!(
                     "Expected </{}>",
