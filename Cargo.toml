@@ -3,7 +3,7 @@ proc-macro = true
 
 [package]
 authors = ["Caden cadencrowson@gmail.com"]
-categories = ["game-development", "gui", "development-tools::procedural-macro"]
+categories = ["game-development", "gui"]
 description = "A procedural macro to generate Bevy UI code from HTML-like syntax"
 edition = "2021"
 keywords = ["bevy", "ui", "ecs", "macro", "html"]
