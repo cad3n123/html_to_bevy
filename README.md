@@ -53,4 +53,34 @@ It transforms the HTML into ECS code that defines components and spawns nodes wi
 ## What It Expands To
 The html! macro takes the HTML-like syntax and generates native ECS code for Bevy. For the example above, it expands to this:
 ```
+#[derive(Component)]
+struct Body;
+
+impl Body {
+    fn spawn(mut commands: Commands) {
+        commands
+            .spawn((Self, Node::default()))
+            .with_children(|parent| {
+                Container::spawn(parent).with_children(|parent| {
+                    parent.spawn(Node::default()).insert(Text::from("Line 1"));
+                    parent.spawn(Node::default()).insert(Text::from("Line 2"));
+                });
+            });
+    }
+}
+#[derive(Component)]
+struct Container;
+
+impl Container {
+    fn spawn<'a>(parent: &'a mut ChildBuilder<'_>) -> EntityCommands<'a> {
+        let mut me = parent.spawn((
+            Self,
+            Node {
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+        ));
+        me
+    }
+}
 ```
