@@ -1,0 +1,10 @@
+[lib]
+proc-macro = true
+
+[package]
+name = "html_to_bevy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+convert_case = "0.8.0"
