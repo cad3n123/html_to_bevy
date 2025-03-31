@@ -2,9 +2,16 @@
 proc-macro = true
 
 [package]
-name = "html_to_bevy"
-version = "0.1.0"
+authors = ["Caden cadencrowson@gmail.com"]
+categories = ["game-development", "gui", "development-tools::procedural-macro"]
+description = "A procedural macro to generate Bevy UI code from HTML-like syntax"
 edition = "2021"
+keywords = ["bevy", "ui", "ecs", "macro", "html"]
+license = "MIT"
+name = "html_to_bevy"
+readme = "README.md"
+repository = "https://github.com/cad3n123/html_to_bevy/tree/main"
+version = "0.1.0"
 
 [dependencies]
 convert_case = "0.8.0"
