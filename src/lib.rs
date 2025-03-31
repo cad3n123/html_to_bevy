@@ -12,12 +12,46 @@ struct StructInfo {
     attributes: Vec<String>,
 }
 
+/// Creates bevy ui from an html like syntax.
+///
+/// Tag names are optional, and allow you to style elements and query them in other parts of your bevy code. low you to style elements and query them in other parts of your bevy code. To style elements, treat their tag name as an id, by using a hashtag before its name.
+///
+/// # Example
+/// ```rust
+/// App::new()
+///     .add_plugins(DefaultPlugins)
+///     .add_systems(Startup, (setup, Body::spawn).chain())
+///     .run();
+///
+/// html!(
+///     <head>
+///     <script>
+///         #container {
+///             Node {
+///                 flex_direction: FlexDirection::Column,
+///                 ..default()
+///             };
+///         }
+///     </script>
+///     </head>
+///
+///     <body>
+///         <container>
+///             <>"Line 1"</>
+///             <>"Line 2"</>
+///         </main>
+///     </body>
+/// );
+/// 
+/// fn setup(mut commands: Commands) {
+///     commands.spawn(Camera2d);
+/// }
+/// ```
+///
+/// # Panics
+///
+/// Panics if unable to parse macro result
 #[proc_macro]
-#[allow(
-    clippy::missing_panics_doc,
-    clippy::too_many_lines,
-    clippy::cognitive_complexity
-)]
 pub fn html(input: TokenStream) -> TokenStream {
     let mut tokens = input.into_iter().peekable();
     let styles = match parse_head(&mut tokens) {
@@ -30,7 +64,7 @@ pub fn html(input: TokenStream) -> TokenStream {
         Err(err) => return err,
     };
 
-    result.parse().unwrap()
+    result.parse().expect("Unable to parse macro result")
 }
 fn parse_head(
     tokens: &mut Peekable<token_stream::IntoIter>,
