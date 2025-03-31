@@ -42,7 +42,7 @@ struct StructInfo {
 ///         </main>
 ///     </body>
 /// );
-/// 
+///
 /// fn setup(mut commands: Commands) {
 ///     commands.spawn(Camera2d);
 /// }
@@ -249,7 +249,7 @@ fn parse_tag(
             {
                 return Err(format_compile_error!(
                     "Expected </{}>",
-                    struct_name.unwrap_or_default()
+                    struct_name.unwrap_or_default().to_case(Case::Kebab)
                 ));
             }
         }
