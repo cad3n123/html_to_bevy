@@ -1,6 +1,6 @@
 use convert_case::{Case, Casing};
 use proc_macro::{token_stream, Delimiter, TokenStream, TokenTree};
-use std::{collections::HashMap, iter::Peekable};
+use std::{collections::{HashMap, HashSet}, iter::Peekable};
 
 #[macro_use]
 mod macros;
@@ -143,7 +143,7 @@ fn parse_body(
     tokens: &mut Peekable<token_stream::IntoIter>,
     styles: &HashMap<StructName, StructInfo>,
 ) -> Result<String, TokenStream> {
-    let mut struct_names: Vec<String> = Vec::new();
+    let mut struct_names: HashSet<String> = HashSet::new();
     let mut result =
         "#[derive(Component)]\nstruct Body;\nimpl Body{\nfn spawn(mut commands: Commands) {\ncommands.spawn((Self, Node::default())).with_children(|parent| {\n".to_owned();
     assert_next_tag(tokens, "body")?;
@@ -153,8 +153,8 @@ fn parse_body(
         .nth(1)
         .is_some_and(|token| token.to_string() != "/")
     {
-        let (mut tag_struct_names, tag_result) = parse_tag(tokens)?;
-        struct_names.append(&mut tag_struct_names);
+        let (tag_struct_names, tag_result) = parse_tag(tokens)?;
+        struct_names.extend(tag_struct_names);
         result.push_str(&tag_result);
     }
     assert_next_end_tag(tokens, "body")?;
