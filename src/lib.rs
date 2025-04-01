@@ -88,8 +88,12 @@ fn get_structs_used(
             (cloned.next(), cloned.next())
         {
             if first.as_char() == '<' {
-                let struct_name = second.to_string();
+                let mut struct_name = second.to_string();
                 if !["head", "script", "body"].contains(&struct_name.as_str()) {
+                    while cloned.peek().is_some() && !peek_matches_token!(cloned, Punct, ">") {
+                        struct_name
+                            .push_str(unsafe { &cloned.next().unwrap_unchecked().to_string() });
+                    }
                     struct_names.insert(struct_name.to_case(Case::Pascal));
                 }
             }
