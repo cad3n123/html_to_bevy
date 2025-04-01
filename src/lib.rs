@@ -1,6 +1,9 @@
 use convert_case::{Case, Casing};
 use proc_macro::{token_stream, Delimiter, TokenStream, TokenTree};
-use std::{collections::{HashMap, HashSet}, iter::Peekable};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::Peekable,
+};
 
 #[macro_use]
 mod macros;
@@ -54,17 +57,45 @@ struct StructInfo {
 #[proc_macro]
 pub fn html(input: TokenStream) -> TokenStream {
     let mut tokens = input.into_iter().peekable();
+
+    // return format_compile_error!("Test3");
+
+    let structs_used = get_structs_used(tokens.clone());
+
     let styles = match parse_head(&mut tokens) {
         Ok(styles) => styles,
         Err(err) => return err,
     };
 
-    let result = match parse_body(&mut tokens, &styles) {
-        Ok(result) => result,
+    let mut result = implement_styles(&structs_used, &styles);
+
+    match parse_body(&mut tokens) {
+        Ok(body_result) => result.push_str(&body_result),
         Err(err) => return err,
     };
 
     result.parse().expect("Unable to parse macro result")
+}
+fn get_structs_used(
+    mut tokens: Peekable<impl Iterator<Item = TokenTree> + Clone>,
+) -> HashSet<String> {
+    let mut struct_names = HashSet::new();
+    while tokens.peek().is_some() {
+        #[allow(clippy::unused_peekable)]
+        let mut cloned = tokens.clone();
+        if let (Some(TokenTree::Punct(first)), Some(TokenTree::Ident(second))) =
+            (cloned.next(), cloned.next())
+        {
+            if first.as_char() == '<' {
+                let struct_name = second.to_string();
+                if !["head", "script", "body"].contains(&struct_name.as_str()) {
+                    struct_names.insert(struct_name.to_case(Case::Pascal));
+                }
+            }
+        }
+        tokens.next();
+    }
+    struct_names
 }
 fn parse_head(
     tokens: &mut Peekable<token_stream::IntoIter>,
@@ -91,7 +122,7 @@ fn parse_head(
                                     &tokens.next().unwrap_unchecked().to_string()
                                 });
                             }
-                            struct_name
+                            struct_name.to_case(Case::Pascal)
                         };
                         let TokenTree::Group(group) =
                             assert_next_token!(tokens, Group, Delimiter::Brace, Err)
@@ -117,6 +148,7 @@ fn parse_head(
                                 attributes.push(attribute);
                             }
                         }
+                        // return Err(format_compile_error!("{struct_name}"));
                         result.insert(struct_name, StructInfo { node, attributes });
                     }
                     unexpected => {
@@ -139,11 +171,49 @@ fn parse_head(
 
     Ok(result)
 }
-fn parse_body(
-    tokens: &mut Peekable<token_stream::IntoIter>,
-    styles: &HashMap<StructName, StructInfo>,
-) -> Result<String, TokenStream> {
-    let mut struct_names: HashSet<String> = HashSet::new();
+fn implement_styles(
+    structs_used: &HashSet<String>,
+    styles: &HashMap<String, StructInfo>,
+) -> String {
+    let mut result = String::new();
+
+    for struct_used in structs_used {
+        let (node, attributes) = styles.get(struct_used).map_or_else(
+            || ("Node::default()".to_owned(), String::new()),
+            |style| {
+                let node = style
+                    .node
+                    .as_ref()
+                    .map_or_else(|| "Node::default()".to_owned(), ToOwned::to_owned);
+                let mut attributes = String::new();
+                if !style.attributes.is_empty() {
+                    attributes.push_str("me");
+                    for attribute in &style.attributes {
+                        attributes.push_str(&format!(".insert({attribute})"));
+                    }
+                    attributes.push(';');
+                }
+                (node, attributes)
+            },
+        );
+
+        result.push_str(&format!(
+            "
+            #[derive(Component)]\n
+            struct {struct_used};\n
+            impl {struct_used} {{\n
+                fn spawn<'a>(parent: &'a mut ChildBuilder<'_>) -> EntityCommands<'a> {{\n
+                    let mut me = parent.spawn((Self, {node}));
+                    {attributes}
+                    me
+                }}\n
+            }}"
+        ));
+    }
+
+    result
+}
+fn parse_body(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<String, TokenStream> {
     let mut result =
         "#[derive(Component)]\nstruct Body;\nimpl Body{\nfn spawn(mut commands: Commands) {\ncommands.spawn((Self, Node::default())).with_children(|parent| {\n".to_owned();
     assert_next_tag(tokens, "body")?;
@@ -153,54 +223,16 @@ fn parse_body(
         .nth(1)
         .is_some_and(|token| token.to_string() != "/")
     {
-        let (tag_struct_names, tag_result) = parse_tag(tokens)?;
-        struct_names.extend(tag_struct_names);
+        let tag_result = parse_tag(tokens)?;
         result.push_str(&tag_result);
     }
     assert_next_end_tag(tokens, "body")?;
     result.push_str("});\n}\n}");
 
-    for struct_name in struct_names {
-        result.push_str(&format!(
-            "#[derive(Component)]\n
-            struct {struct_name};\n
-            impl {struct_name} {{\n
-                fn spawn<'a>(parent: &'a mut ChildBuilder<'_>) -> EntityCommands<'a> {{\n
-                    let mut me = parent.spawn((Self,"
-        ));
-        result.push_str(&styles.get(&struct_name).map_or_else(
-            || "Node::default()))".to_owned(),
-            |style| {
-                let mut result = style
-                    .node
-                    .clone()
-                    .unwrap_or_else(|| "Node::default()".to_owned());
-                result.push_str("))");
-
-                if !style.attributes.is_empty() {
-                    result.push_str(";\nme");
-                    for attribute in &style.attributes {
-                        result.push_str(&format!(".insert({attribute})"));
-                    }
-                }
-
-                result
-            },
-        ));
-        result.push_str(";\nme");
-        result.push_str(
-            "}\n
-            }\n",
-        );
-    }
-
     Ok(result)
 }
 type StructName = String;
-fn parse_tag(
-    tokens: &mut Peekable<token_stream::IntoIter>,
-) -> Result<(Vec<StructName>, String), TokenStream> {
-    let mut struct_names = Vec::new();
+fn parse_tag(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<String, TokenStream> {
     let mut result = String::new();
 
     assert_next_token!(tokens, Punct, "<", Err);
@@ -210,7 +242,6 @@ fn parse_tag(
             struct_name.push_str(unsafe { &tokens.next().unwrap_unchecked().to_string() });
         }
         struct_name = struct_name.to_case(Case::Pascal);
-        struct_names.push(struct_name.clone());
         Some(struct_name)
     } else {
         None
@@ -232,8 +263,7 @@ fn parse_tag(
                 .is_some_and(|token| token.to_string() != "/")
             {
                 match parse_tag(tokens) {
-                    Ok((mut child_struct_names, child_result)) => {
-                        struct_names.append(&mut child_struct_names);
+                    Ok(child_result) => {
                         result.push_str(&child_result);
                     }
                     error => {
@@ -269,7 +299,7 @@ fn parse_tag(
         return Err(format_compile_error!("Expected end tag"));
     }
 
-    Ok((struct_names, result))
+    Ok(result)
 }
 fn peek_matches_tag(mut tokens: impl Iterator<Item = TokenTree>, expected: &str) -> bool {
     if let (Some(TokenTree::Punct(p1)), Some(TokenTree::Ident(tag)), Some(TokenTree::Punct(p2))) =
