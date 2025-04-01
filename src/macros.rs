@@ -1,3 +1,16 @@
+macro_rules! assert_next_string_lit {
+    ($tokens:ident, $err:expr) => {{
+        let literal = assert_next_token!($tokens, Literal, $err).to_string();
+        if literal.len() >= 2 && literal.starts_with('"') && literal.ends_with('"') {
+            let mut chars = literal.chars();
+            chars.next();
+            chars.next_back();
+            chars.as_str().to_string()
+        } else {
+            return $err(format_compile_error!("Expected string"));
+        }
+    }};
+}
 macro_rules! assert_next_token {
     ($tokens:ident, $($args:tt)*) => {
         {assert_peek_token!($tokens, $($args)*);
@@ -57,6 +70,13 @@ macro_rules! assert_peek_token {
     };
 }
 macro_rules! peek_matches_token {
+    ($tokens:expr, Group, $expected:expr) => {{
+        if let Some(TokenTree::Group(group)) = $tokens.peek() {
+            group.delimiter() == $expected
+        } else {
+            false
+        }
+    }};
     ($tokens:expr, $tree:ident, $expected:expr) => {{
         if let Some(TokenTree::$tree(tree)) = $tokens.peek() {
             tree.to_string() == $expected
@@ -72,4 +92,15 @@ macro_rules! format_compile_error {
     ($($arg:tt)*) => {
         {format!("compile_error!(\"{}\");", format_args!($($arg)*)).parse().unwrap()}
     };
+}
+macro_rules! collect_until_token {
+    ($tokens:ident, $($args:tt)*) => {{
+        let mut collected = String::new();
+        while $tokens.peek().is_some() && !peek_matches_token!($tokens, $($args)*) {
+            collected.push_str(unsafe {
+                &$tokens.next().unwrap_unchecked().to_string()
+            });
+        }
+        collected
+    }};
 }

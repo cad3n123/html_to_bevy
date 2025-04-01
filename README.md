@@ -25,26 +25,37 @@ fn main() {
 
 html!(
     <head>
-        <script>
-            #container (pub(crate)) {
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    ..default()
-                };
-            }
-        </script>
+    <script>
+        pub(crate) Container {
+            Node {
+                flex_direction: FlexDirection::Column,
+                ..default()
+            };
+        }
+        Line {
+            TextColor::from(ORANGE_300);
+        }
+        .odd {
+            TextFont::from_font_size(30.);
+        }
+        .even {
+            TextFont::from_font_size(40.);
+        }
+    </script>
     </head>
 
     <body>
-        <container>
-            <>"Line 1"</>
-            <>"Line 2"</>
-        </container>
+    <Container>
+        <Line class="odd">"Line 1"</Line>
+        <Line class="even">"Line 2"</Line>
+        <Line class="odd">"Line 3"</Line>
+        <Line class="even">"Line 4"</Line>
+    </Container>
     </body>
 );
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 }
 ```
 
@@ -62,6 +73,21 @@ The html! macro takes the HTML-like syntax and generates native ECS code for Bev
 
 ```
 #[derive(Component)]
+struct Line;
+
+impl Line {
+    fn spawn<'a>(
+        parent: &'a mut ChildBuilder<'_>,
+        asset_server: &Res<AssetServer>,
+    ) -> EntityCommands<'a> {
+        parent.spawn((Self, Node::default()))
+    }
+    fn apply_attributes(mut me: EntityCommands) -> EntityCommands {
+        me.insert(TextColor::from(ORANGE_300));
+        me
+    }
+}
+#[derive(Component)]
 pub(crate) struct Container;
 
 impl Container {
@@ -69,16 +95,34 @@ impl Container {
         parent: &'a mut ChildBuilder<'_>,
         asset_server: &Res<AssetServer>,
     ) -> EntityCommands<'a> {
-        let mut me = parent.spawn((
+        parent.spawn((
             Self,
             Node {
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
-        ));
+        ))
+    }
+    fn apply_attributes(mut me: EntityCommands) -> EntityCommands {
         me
     }
 }
+macro_rules! apply_even_class {
+    ($element:expr) => {{
+        let mut element = $element;
+        element.insert(TextFont::from_font_size(40.));
+        element
+    }};
+}
+use apply_even_class;
+macro_rules! apply_odd_class {
+    ($element:expr) => {{
+        let mut element = $element;
+        element.insert(TextFont::from_font_size(30.));
+        element
+    }};
+}
+use apply_odd_class;
 #[derive(Component)]
 struct Body;
 
@@ -94,10 +138,30 @@ impl Body {
                 },
             ))
             .with_children(|parent| {
-                Container::spawn(parent, &asset_server).with_children(|parent| {
-                    parent.spawn(Node::default()).insert(Text::from("Line 1"));
-                    parent.spawn(Node::default()).insert(Text::from("Line 2"));
-                });
+                Container::apply_attributes(Container::spawn(parent, &asset_server)).with_children(
+                    |parent| {
+                        Line::apply_attributes(apply_odd_class!(Line::spawn(
+                            parent,
+                            &asset_server
+                        )))
+                        .insert(Text::from("Line 1"));
+                        Line::apply_attributes(apply_even_class!(Line::spawn(
+                            parent,
+                            &asset_server
+                        )))
+                        .insert(Text::from("Line 2"));
+                        Line::apply_attributes(apply_odd_class!(Line::spawn(
+                            parent,
+                            &asset_server
+                        )))
+                        .insert(Text::from("Line 3"));
+                        Line::apply_attributes(apply_even_class!(Line::spawn(
+                            parent,
+                            &asset_server
+                        )))
+                        .insert(Text::from("Line 4"));
+                    },
+                );
             });
     }
 }
