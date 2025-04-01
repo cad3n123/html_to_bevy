@@ -11,6 +11,7 @@ mod macros;
 extern crate proc_macro;
 
 struct StructInfo {
+    visibility: Option<String>,
     node: Option<String>,
     attributes: Vec<String>,
 }
@@ -124,6 +125,25 @@ fn parse_head(
                             }
                             struct_name.to_case(Case::Pascal)
                         };
+                        let visibility = if let Some(TokenTree::Group(group)) = tokens.peek() {
+                            if group.delimiter() == Delimiter::Parenthesis {
+                                let Some(TokenTree::Group(group)) = tokens.next() else {
+                                    unreachable!()
+                                };
+
+                                Some(
+                                    group
+                                        .stream()
+                                        .into_iter()
+                                        .map(|token| token.to_string())
+                                        .collect::<String>(),
+                                )
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
                         let TokenTree::Group(group) =
                             assert_next_token!(tokens, Group, Delimiter::Brace, Err)
                         else {
@@ -148,8 +168,14 @@ fn parse_head(
                                 attributes.push(attribute);
                             }
                         }
-                        // return Err(format_compile_error!("{struct_name}"));
-                        result.insert(struct_name, StructInfo { node, attributes });
+                        result.insert(
+                            struct_name,
+                            StructInfo {
+                                visibility,
+                                node,
+                                attributes,
+                            },
+                        );
                     }
                     unexpected => {
                         return Err(format_compile_error!(
@@ -178,9 +204,13 @@ fn implement_styles(
     let mut result = String::new();
 
     for struct_used in structs_used {
-        let (node, attributes) = styles.get(struct_used).map_or_else(
-            || ("Node::default()".to_owned(), String::new()),
+        let (visibility, node, attributes) = styles.get(struct_used).map_or_else(
+            || (String::new(), "Node::default()".to_owned(), String::new()),
             |style| {
+                let visibility = style
+                    .visibility
+                    .clone()
+                    .map_or_else(<_>::default, |visibility| format!("{visibility} "));
                 let node = style
                     .node
                     .as_ref()
@@ -193,14 +223,14 @@ fn implement_styles(
                     }
                     attributes.push(';');
                 }
-                (node, attributes)
+                (visibility, node, attributes)
             },
         );
 
         result.push_str(&format!(
             "
             #[derive(Component)]\n
-            struct {struct_used};\n
+            {visibility}struct {struct_used};\n
             impl {struct_used} {{\n
                 fn spawn<'a>(parent: &'a mut ChildBuilder<'_>) -> EntityCommands<'a> {{\n
                     let mut me = parent.spawn((Self, {node}));
