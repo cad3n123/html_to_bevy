@@ -59,8 +59,6 @@ struct StructInfo {
 pub fn html(input: TokenStream) -> TokenStream {
     let mut tokens = input.into_iter().peekable();
 
-    // return format_compile_error!("Test3");
-
     let structs_used = get_structs_used(tokens.clone());
 
     let styles = match parse_head(&mut tokens) {
@@ -236,7 +234,7 @@ fn implement_styles(
             #[derive(Component)]\n
             {visibility}struct {struct_used};\n
             impl {struct_used} {{\n
-                fn spawn<'a>(parent: &'a mut ChildBuilder<'_>) -> EntityCommands<'a> {{\n
+                fn spawn<'a>(parent: &'a mut ChildBuilder<'_>, asset_server: &Res<AssetServer>) -> EntityCommands<'a> {{\n
                     let mut me = parent.spawn((Self, {node}));
                     {attributes}
                     me
@@ -249,7 +247,7 @@ fn implement_styles(
 }
 fn parse_body(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<String, TokenStream> {
     let mut result =
-        "#[derive(Component)]\nstruct Body;\nimpl Body{\nfn spawn(mut commands: Commands) {\ncommands.spawn((Self, Node::default())).with_children(|parent| {\n".to_owned();
+        "#[derive(Component)]\nstruct Body;\nimpl Body{\nfn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {\ncommands.spawn((Self, Node { width: Val::Percent(100.), height: Val::Percent(100.), ..default()})).with_children(|parent| {\n".to_owned();
     assert_next_tag(tokens, "body")?;
 
     while tokens
@@ -284,7 +282,7 @@ fn parse_tag(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<String, To
     if peek_matches_token!(tokens, Literal) || peek_matches_token!(tokens, Punct, "<") {
         result.push_str(&struct_name.as_ref().map_or_else(
             || "parent.spawn(Node::default())".to_owned(),
-            |struct_name| format!("{struct_name}::spawn(parent)"),
+            |struct_name| format!("{struct_name}::spawn(parent, &asset_server)"),
         ));
         if peek_matches_token!(tokens, Literal) {
             let literal = unsafe { tokens.next().unwrap_unchecked() };

@@ -65,7 +65,10 @@ The html! macro takes the HTML-like syntax and generates native ECS code for Bev
 pub(crate) struct Container;
 
 impl Container {
-    fn spawn<'a>(parent: &'a mut ChildBuilder<'_>) -> EntityCommands<'a> {
+    fn spawn<'a>(
+        parent: &'a mut ChildBuilder<'_>,
+        asset_server: &Res<AssetServer>,
+    ) -> EntityCommands<'a> {
         let mut me = parent.spawn((
             Self,
             Node {
@@ -80,11 +83,18 @@ impl Container {
 struct Body;
 
 impl Body {
-    fn spawn(mut commands: Commands) {
+    fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
         commands
-            .spawn((Self, Node::default()))
+            .spawn((
+                Self,
+                Node {
+                    width: Val::Percent(100.),
+                    height: Val::Percent(100.),
+                    ..default()
+                },
+            ))
             .with_children(|parent| {
-                Container::spawn(parent).with_children(|parent| {
+                Container::spawn(parent, &asset_server).with_children(|parent| {
                     parent.spawn(Node::default()).insert(Text::from("Line 1"));
                     parent.spawn(Node::default()).insert(Text::from("Line 2"));
                 });
