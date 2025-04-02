@@ -289,11 +289,13 @@ fn implement_styles(structs_used: &HashSet<String>, styles: &StyleInfo) -> Strin
         ));
     }
     for (class_name, class_info) in classes {
+        let macro_name = format!("apply_{class_name}_class");
+
         let (visibility, attributes) = {
             let visibility = class_info
                 .visibility
                 .clone()
-                .map_or_else(<_>::default, |visibility| format!("{visibility} "));
+                .map_or_else(<_>::default, |visibility| format!("{visibility} use {macro_name};"));
 
             let mut attributes = String::new();
 
@@ -307,7 +309,6 @@ fn implement_styles(structs_used: &HashSet<String>, styles: &StyleInfo) -> Strin
 
             (visibility, attributes)
         };
-        let macro_name = format!("apply_{class_name}_class");
 
         result.push_str(&format!(
             "
@@ -318,7 +319,7 @@ fn implement_styles(structs_used: &HashSet<String>, styles: &StyleInfo) -> Strin
                     element\n
                 }}}}\n
             }}\n
-            {visibility} use {macro_name};"
+            {visibility}"
         ));
     }
 
