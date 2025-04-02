@@ -120,6 +120,7 @@ fn get_structs_used(
 fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo, TokenStream> {
     let mut structs: HashMap<StructName, StructInfo> = HashMap::new();
     let mut classes: HashMap<ClassName, ClassInfo> = HashMap::new();
+    let mut visibility = None;
 
     assert_next_tag(tokens, "head")?;
     if peek_matches_tag(tokens.clone(), "style") {
@@ -131,27 +132,10 @@ fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo
                     '<' => {
                         break;
                     }
+                    // Class
                     '.' => {
                         tokens.next();
-                        let ident = assert_next_token!(tokens, Ident, Err).to_string();
-
-                        let (class_name, visibility) = if ident == "pub" {
-                            if peek_matches_token!(tokens, Group, Delimiter::Parenthesis) {
-                                let visibility =
-                                    unsafe { tokens.next().unwrap_unchecked().to_string() };
-                                (
-                                    assert_next_token!(tokens, Ident, Err).to_string(),
-                                    Some(format!("{ident}{visibility}")),
-                                )
-                            } else {
-                                (
-                                    assert_next_token!(tokens, Ident, Err).to_string(),
-                                    Some(ident),
-                                )
-                            }
-                        } else {
-                            (ident, None)
-                        };
+                        let class_name = assert_next_token!(tokens, Ident, Err).to_string();
 
                         let TokenTree::Group(group) =
                             assert_next_token!(tokens, Group, Delimiter::Brace, Err)
@@ -168,7 +152,7 @@ fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo
                         classes.insert(
                             class_name,
                             ClassInfo {
-                                visibility,
+                                visibility: visibility.take(),
                                 attributes,
                             },
                         );
@@ -179,27 +163,26 @@ fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo
                         ))
                     }
                 },
-                TokenTree::Ident(ident) => {
+                // Visibility
+                TokenTree::Ident(ident) if ident.to_string() == "pub" => {
                     let ident = ident.to_string();
                     tokens.next();
-
-                    let (struct_name, visibility) = if ident == "pub" {
+                    visibility = {
                         if peek_matches_token!(tokens, Group, Delimiter::Parenthesis) {
-                            let visibility =
+                            let visibility_inside =
                                 unsafe { tokens.next().unwrap_unchecked().to_string() };
-                            (
-                                assert_next_token!(tokens, Ident, Err).to_string(),
-                                Some(format!("{ident}{visibility}")),
-                            )
+                            
+                                Some(format!("{ident}{visibility_inside}"))
+                            
                         } else {
-                            (
-                                assert_next_token!(tokens, Ident, Err).to_string(),
-                                Some(ident),
-                            )
+                                Some(ident)
                         }
-                    } else {
-                        (ident, None)
-                    };
+                    }
+                },
+                // Tag
+                TokenTree::Ident(struct_name) => {
+                    let struct_name = struct_name.to_string();
+                    tokens.next();
 
                     let TokenTree::Group(group) =
                         assert_next_token!(tokens, Group, Delimiter::Brace, Err)
@@ -221,7 +204,7 @@ fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo
                     structs.insert(
                         struct_name,
                         StructInfo {
-                            visibility,
+                            visibility: visibility.take(),
                             node,
                             attributes,
                         },

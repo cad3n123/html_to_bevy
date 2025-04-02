@@ -35,7 +35,7 @@ html!(
         Line {
             TextColor::from(ORANGE_300);
         }
-        .odd {
+        pub .odd {
             TextFont::from_font_size(30.);
         }
         .even {
@@ -114,7 +114,7 @@ macro_rules! apply_even_class {
         element
     }};
 }
-use apply_even_class;
+pub use apply_even_class;
 macro_rules! apply_odd_class {
     ($element:expr) => {{
         let mut element = $element;
@@ -122,7 +122,6 @@ macro_rules! apply_odd_class {
         element
     }};
 }
-use apply_odd_class;
 #[derive(Component)]
 struct Body;
 
