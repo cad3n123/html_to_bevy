@@ -25,7 +25,7 @@ fn main() {
 
 html!(
     <head>
-    <script>
+    <style>
         pub(crate) Container {
             Node {
                 flex_direction: FlexDirection::Column,
@@ -41,7 +41,7 @@ html!(
         .even {
             TextFont::from_font_size(40.);
         }
-    </script>
+    </style>
     </head>
 
     <body>

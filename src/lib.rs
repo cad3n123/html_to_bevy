@@ -39,7 +39,7 @@ type StyleInfo = (
 ///
 /// html!(
 ///     <head>
-///     <script>
+///     <style>
 ///         pub(crate) Container {
 ///             Node {
 ///                 flex_direction: FlexDirection::Column,
@@ -55,7 +55,7 @@ type StyleInfo = (
 ///         .even {
 ///             TextFont::from_font_size(40.);
 ///         }
-///     </script>
+///     </style>
 ///     </head>
 ///     
 ///     <body>
@@ -108,7 +108,7 @@ fn get_structs_used(
         {
             if first.as_char() == '<' {
                 let struct_name = second.to_string();
-                if !["head", "script", "body"].contains(&struct_name.as_str()) {
+                if !["head", "style", "body"].contains(&struct_name.as_str()) {
                     struct_names.insert(struct_name.to_case(Case::Pascal));
                 }
             }
@@ -123,7 +123,7 @@ fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo
     let mut classes: HashMap<ClassName, ClassInfo> = HashMap::new();
 
     assert_next_tag(tokens, "head")?;
-    if peek_matches_tag(tokens.clone(), "script") {
+    if peek_matches_tag(tokens.clone(), "style") {
         tokens.nth(2);
 
         while let Some(token) = tokens.peek() {
@@ -236,7 +236,7 @@ fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo
             }
         }
 
-        assert_next_end_tag(tokens, "script")?;
+        assert_next_end_tag(tokens, "style")?;
     }
     assert_next_end_tag(tokens, "head")?;
 
