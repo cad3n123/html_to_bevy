@@ -72,10 +72,6 @@ type StyleInfo = (
 ///     commands.spawn(Camera2d);
 /// }
 /// ```
-///
-/// # Panics
-///
-/// Panics if unable to parse macro result
 #[proc_macro]
 pub fn html(input: TokenStream) -> TokenStream {
     let mut tokens = input.into_iter().peekable();
@@ -94,7 +90,10 @@ pub fn html(input: TokenStream) -> TokenStream {
         Err(err) => return err,
     };
 
-    result.parse().expect("Unable to parse macro result")
+    match result.parse() {
+        Ok(result) => result,
+        Err(err) => format_compile_error!("Could not parse result: {err}"),
+    }
 }
 fn get_structs_used(
     mut tokens: Peekable<impl Iterator<Item = TokenTree> + Clone>,

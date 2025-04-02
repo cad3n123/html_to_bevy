@@ -90,7 +90,7 @@ macro_rules! peek_matches_token {
 }
 macro_rules! format_compile_error {
     ($($arg:tt)*) => {
-        {format!("compile_error!(\"{}\");", format_args!($($arg)*)).parse().unwrap()}
+        {format!("compile_error!(\"{}\");", format_args!($($arg)*)).parse().unwrap_or_default()}
     };
 }
 macro_rules! collect_until_token {
