@@ -1,0 +1,39 @@
+# html_to_bevy v0.6.0
+
+I made a crate for Bevy that allows you to make ui using tags and styling similar to HTML. I’ve been using it in my own projects and thought I might as well make it public, in case others find it useful or also so others could potentially improve it. It's my first crate so be nice but I'd love feedback.
+
+```rust
+html!(
+    <head>
+    <style>
+        pub(crate) Container {
+            Node {
+                flex_direction: FlexDirection::Column,
+                ..default()
+            };
+        }
+        Line {
+            TextColor::from(ORANGE_300);
+        }
+        .odd {
+            TextFont::from_font_size(30.);
+        }
+        .even {
+            TextFont::from_font_size(40.);
+        }
+    </style>
+    </head>
+
+    <body>
+    <Container>
+        <Line class="odd">"Line 1"</Line>
+        <Line class="even">"Line 2"</Line>
+        <Line class="odd">"Line 3"</Line>
+        <Line class="even">"Line 4"</Line>
+    </Container>
+    </body>
+);
+```
+
+https://crates.io/crates/html_to_bevy
+https://github.com/cad3n123/html_to_bevy/tree/main
