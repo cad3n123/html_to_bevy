@@ -279,10 +279,10 @@ fn implement_styles(structs_used: &HashSet<String>, styles: &StyleInfo) -> Strin
             #[derive(Component)]\n
             {visibility}struct {struct_used};\n
             impl {struct_used} {{\n
-                fn spawn<'a>(parent: &'a mut ChildBuilder<'_>, asset_server: &Res<AssetServer>) -> EntityCommands<'a> {{\n
+                fn spawn<'a>(parent: &'a mut ChildBuilder<'_>) -> EntityCommands<'a> {{\n
                     parent.spawn((Self, {node}))
                 }}\n
-                fn apply_attributes(mut me: EntityCommands) -> EntityCommands {{\n
+                fn apply_attributes<'a>(mut me: EntityCommands<'a>, asset_server: &'a Res<AssetServer>) -> EntityCommands<'a> {{\n
                     {attributes}
                     me\n
                 }}
@@ -398,7 +398,7 @@ fn parse_tag(
             |struct_name| {
                 
                 format!(
-                    "{struct_name}::apply_attributes({apply_classes}{struct_name}::spawn(parent, &asset_server){end_parenthesis})"
+                    "{struct_name}::apply_attributes({apply_classes}{struct_name}::spawn(parent){end_parenthesis}, &asset_server)"
                 )
             },
         ));
