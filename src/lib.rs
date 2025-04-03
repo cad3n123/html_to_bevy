@@ -259,11 +259,15 @@ fn implement_styles(structs_used: &HashSet<String>, styles: &StyleInfo) -> Strin
         result.push_str(&format!(
             "
             #[derive(Component)]\n
+            #[allow(dead_code)]\n
             {visibility}struct {struct_used};\n
             impl {struct_used} {{\n
+                #![allow(unused_variables)]\n
+
                 fn spawn<'a>(parent: &'a mut ChildBuilder<'_>) -> EntityCommands<'a> {{\n
                     parent.spawn((Self, {node}))
                 }}\n
+
                 fn apply_attributes<'a>(mut me: EntityCommands<'a>, asset_server: &'a Res<AssetServer>) -> EntityCommands<'a> {{\n
                     {attributes}
                     me\n
@@ -295,6 +299,7 @@ fn implement_styles(structs_used: &HashSet<String>, styles: &StyleInfo) -> Strin
 
         result.push_str(&format!(
             "
+            #[allow(unused_macros)]
             macro_rules! {macro_name} {{\n
                 ($element:expr) => {{{{\n
                     let mut element = $element;\n
