@@ -418,7 +418,7 @@ fn parse_tag(
     if is_self_closing {
         let Some(struct_name) = struct_name else { return Err(format_compile_error!("Self closing tag must have a name"))};
         result.push_str(&format!(
-            "{struct_name}::apply_attributes({apply_classes}{struct_name}::spawn(parent, asset_server){end_parenthesis}, &asset_server)"
+            "{struct_name}::apply_attributes({apply_classes}{struct_name}::spawn(parent, asset_server){end_parenthesis}, asset_server)"
         ));
     } else {
         if !(peek_matches_token!(tokens, Literal) || peek_matches_token!(tokens, Punct, "<")) {
@@ -430,7 +430,7 @@ fn parse_tag(
             |struct_name| {
                 
                 format!(
-                    "{struct_name}::apply_attributes({apply_classes}{struct_name}::spawn_as_child(parent){end_parenthesis}, &asset_server)"
+                    "{struct_name}::apply_attributes({apply_classes}{struct_name}::spawn_as_child(parent){end_parenthesis}, asset_server)"
                 )
             },
         ));
