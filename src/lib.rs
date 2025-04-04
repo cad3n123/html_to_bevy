@@ -1,9 +1,6 @@
 use convert_case::{Case, Casing};
 use proc_macro::{token_stream, Delimiter, TokenStream, TokenTree};
-use std::{
-    collections::{HashMap, HashSet},
-    iter::Peekable,
-};
+use std::iter::Peekable;
 
 #[macro_use]
 mod macros;
@@ -22,106 +19,108 @@ struct ClassInfo {
     attributes: Vec<String>,
 }
 type StyleInfo = (
-    HashMap<StructName, StructInfo>,
-    HashMap<ClassName, ClassInfo>,
+    Vec<(StructName, StructInfo)>,
+    Vec<(ClassName, ClassInfo)>,
 );
 
 /// Creates bevy ui from an html like syntax.
 ///
-/// Tag names are optional, and allow you to style elements and query them in other parts of your bevy code. Classes allow you to apply the same style to multiple elements.
+/// Tag names are optional, and allow you to style elements and query those elements in other parts of your bevy code. Classes allow you to apply the same style to multiple elements. Also, styles made from a macro call can be used in other macro calls. 
 ///
 /// # Example
 /// ```rust
-/// App::new()
-///     .add_plugins(DefaultPlugins)
-///     .add_systems(Startup, (setup, Body::spawn).chain())
-///     .run();
-///
+/// html!(
+///     <Container>
+///         <>"Hello, World!"</>
+///     </Container>
+/// );
+/// App.add_systems(Startup, Container::spawn_as_root);
+/// ```
+/// # Reusing Roots
+/// Root elements can be used as elements in other macro calls, by formatting it as a self closing tag.
+/// 
+/// # Example
+/// ```rust
+/// html!(
+///     <Info>
+///         <>"Hello,"</>
+///         <>"World"</>
+///     </Info>
+/// );
 /// html!(
 ///     <head>
 ///     <style>
-///         pub(crate) Container {
+///         .odd {
 ///             Node {
 ///                 flex_direction: FlexDirection::Column,
 ///                 ..default()
 ///             };
 ///         }
-///         Line {
-///             TextColor::from(ORANGE_300);
-///         }
-///         .odd {
-///             TextFont::from_font_size(30.);
-///         }
 ///         .even {
-///             TextFont::from_font_size(40.);
+///             Node {
+///                 flex_direction: FlexDirection::Row,
+///                 ..default()
+///             };
 ///         }
 ///     </style>
 ///     </head>
-///     
-///     <body>
+/// 
 ///     <Container>
-///         <Line class="odd">"Line 1"</Line>
-///         <Line class="even">"Line 2"</Line>
-///         <Line class="odd">"Line 3"</Line>
-///         <Line class="even">"Line 4"</Line>
+///         <Info class="odd" />
+///         <Info class="even" />
+///         <Info class="odd" />
 ///     </Container>
-///     </body>
 /// );
-///
-/// fn setup(mut commands: Commands) {
-///     commands.spawn(Camera2d);
-/// }
+/// App.add_systems(Startup, Container::spawn_as_root);
 /// ```
+/// 
+/// 
 #[proc_macro]
 pub fn html(input: TokenStream) -> TokenStream {
     let mut tokens = input.into_iter().peekable();
 
-    let structs_used = get_structs_used(tokens.clone());
-
-    let styles = match parse_head(&mut tokens) {
+    let mut styles = match parse_head(&mut tokens) {
         Ok(styles) => styles,
         Err(err) => return err,
     };
 
-    let mut result = implement_styles(&structs_used, &styles);
-
-    match parse_body(&mut tokens, &styles.1.into_keys().collect()) {
-        Ok(body_result) => result.push_str(&body_result),
+    let root_tag = match get_root_tag(&mut tokens) {
+        Ok(root_tag) => root_tag,
         Err(err) => return err,
     };
+
+    if let Some(root_tag) = &root_tag {
+        if !styles.0.iter().any(|struct_style| &struct_style.0 == root_tag) {
+            styles.0.push((root_tag.clone(), StructInfo { visibility: None, node: None, attributes: vec![]}));
+        }
+    }
+
+    let mut result = implement_styles(&styles);
+
+    if let Some(root_tag) = root_tag {
+        let root_visibility = styles.0.iter().find(|struct_style| struct_style.0 == root_tag).map(|struct_style| struct_style.1.visibility.clone()).unwrap_or_default();
+
+        match parse_root(&mut tokens, &root_tag, root_visibility.as_deref(), &styles.1.iter().map(|class| class.0.as_str()).collect()) {
+            Ok(body_result) => result.push_str(&body_result),
+            Err(err) => return err,
+        };
+    }
+    
 
     match result.parse() {
         Ok(result) => result,
         Err(err) => format_compile_error!("Could not parse result: {err}"),
     }
 }
-fn get_structs_used(
-    mut tokens: Peekable<impl Iterator<Item = TokenTree> + Clone>,
-) -> HashSet<String> {
-    let mut struct_names = HashSet::new();
-    while tokens.peek().is_some() {
-        #[allow(clippy::unused_peekable)]
-        let mut cloned = tokens.clone();
-        if let (Some(TokenTree::Punct(first)), Some(TokenTree::Ident(second))) =
-            (cloned.next(), cloned.next())
-        {
-            if first.as_char() == '<' {
-                let struct_name = second.to_string();
-                if !["head", "style", "body"].contains(&struct_name.as_str()) {
-                    struct_names.insert(struct_name.to_case(Case::Pascal));
-                }
-            }
-        }
-        tokens.next();
-    }
-    struct_names
-}
 #[allow(clippy::too_many_lines)]
 fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo, TokenStream> {
-    let mut structs: HashMap<StructName, StructInfo> = HashMap::new();
-    let mut classes: HashMap<ClassName, ClassInfo> = HashMap::new();
+    let mut structs: Vec<(StructName, StructInfo)> = Vec::new();
+    let mut classes: Vec<(ClassName, ClassInfo)> = Vec::new();
     let mut visibility = None;
 
+    if !peek_matches_tag(tokens.clone(), "head"){
+        return Ok((structs, classes))
+    }
     assert_next_tag(tokens, "head")?;
     if peek_matches_tag(tokens.clone(), "style") {
         tokens.nth(2);
@@ -149,12 +148,12 @@ fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo
                             assert_next_token!(group_tokens, Punct, ";", Err);
                             attributes.push(attribute);
                         }
-                        classes.insert(
+                        classes.push((
                             class_name,
                             ClassInfo {
                                 visibility: visibility.take(),
                                 attributes,
-                            },
+                            }),
                         );
                     }
                     unexpected => {
@@ -201,13 +200,13 @@ fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo
                             attributes.push(attribute);
                         }
                     }
-                    structs.insert(
+                    structs.push((
                         struct_name,
                         StructInfo {
                             visibility: visibility.take(),
                             node,
                             attributes,
-                        },
+                        },)
                     );
                 }
                 unexpected => {
@@ -224,51 +223,48 @@ fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo
 
     Ok((structs, classes))
 }
-fn implement_styles(structs_used: &HashSet<String>, styles: &StyleInfo) -> String {
+fn implement_styles(styles: &StyleInfo) -> String {
     let mut result = String::new();
     let (structs, classes) = styles;
 
-    for struct_used in structs_used {
-        let (visibility, node, attributes) = structs.get(struct_used).map_or_else(
-            || (String::new(), "Node::default()".to_owned(), String::new()),
-            |style| {
-                let visibility = style
-                    .visibility
-                    .clone()
-                    .map_or_else(<_>::default, |visibility| format!("{visibility} "));
+    for (struct_name, struct_info) in structs {
+        let visibility = struct_info
+            .visibility
+            .clone()
+            .map_or_else(<_>::default, |visibility| format!("{visibility} "));
 
-                let node = style
-                    .node
-                    .as_ref()
-                    .map_or_else(|| "Node::default()".to_owned(), ToOwned::to_owned);
+        let node = struct_info
+            .node
+            .as_ref()
+            .map_or_else(|| "Node::default()".to_owned(), ToOwned::to_owned);
 
-                let mut attributes = String::new();
+        let mut attributes = String::new();
 
-                if !style.attributes.is_empty() {
-                    attributes.push_str("me");
-                    for attribute in &style.attributes {
-                        attributes.push_str(&format!(".insert({attribute})"));
-                    }
-                    attributes.push(';');
-                }
-
-                (visibility, node, attributes)
-            },
-        );
+        if !struct_info.attributes.is_empty() {
+            attributes.push_str("me");
+            for attribute in &struct_info.attributes {
+                attributes.push_str(&format!(".insert({attribute})"));
+            }
+            attributes.push(';');
+        }
 
         result.push_str(&format!(
             "
             #[derive(Component)]\n
             #[allow(dead_code)]\n
-            {visibility}struct {struct_used};\n
-            impl {struct_used} {{\n
+            {visibility}struct {struct_name};\n
+            impl {struct_name} {{\n
                 #![allow(unused_variables)]\n
 
-                fn spawn<'a>(parent: &'a mut ChildBuilder<'_>) -> EntityCommands<'a> {{\n
-                    parent.spawn((Self, {node}))
+                {visibility}fn spawn_as_child<'a>(parent: &'a mut ChildBuilder<'_>) -> EntityCommands<'a> {{\n
+                    parent.spawn((Self, Self::get_node()))
                 }}\n
 
-                fn apply_attributes<'a>(mut me: EntityCommands<'a>, asset_server: &'a Res<AssetServer>) -> EntityCommands<'a> {{\n
+                {visibility}fn get_node() -> Node {{\n
+                    {node}
+                }}\n
+
+                {visibility}fn apply_attributes<'a>(mut me: EntityCommands<'a>, asset_server: &'a Res<AssetServer>) -> EntityCommands<'a> {{\n
                     {attributes}
                     me\n
                 }}
@@ -313,10 +309,42 @@ fn implement_styles(structs_used: &HashSet<String>, styles: &StyleInfo) -> Strin
 
     result
 }
-fn parse_body(tokens: &mut Peekable<token_stream::IntoIter>, implemented_classes: &Vec<ClassName>) -> Result<String, TokenStream> {
-    let mut result =
-        "#[derive(Component)]\nstruct Body;\nimpl Body{\nfn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {\ncommands.spawn((Self, Node { width: Val::Percent(100.), height: Val::Percent(100.), ..default()})).with_children(|parent| {\n".to_owned();
-    assert_next_tag(tokens, "body")?;
+fn get_root_tag(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<Option<String>, TokenStream> {
+    if tokens.peek().is_some() {
+        assert_next_token!(tokens, Punct, "<", Err);
+        let Some(tag_name) = tokens.next().map(|token| token.to_string()) else {
+            return Err(format_compile_error!("Expected root tag name"));
+        };
+        assert_next_token!(tokens, Punct, ">", Err);
+        Ok(Some(tag_name))
+    } else {
+        Ok(None)
+    }
+    
+    
+}
+// TODO: Let root node just have string
+fn parse_root(tokens: &mut Peekable<token_stream::IntoIter>, root_tag: &str, root_visibility: Option<&str>, implemented_classes: &Vec<&str>) -> Result<String, TokenStream> {
+    let root_visibility = root_visibility.unwrap_or_default();
+    let mut result = format!("
+    impl {root_tag}{{\n
+        {root_visibility}fn spawn_as_root(mut commands: Commands, asset_server: Res<AssetServer>) {{\n
+            let entity = commands.spawn((Self, Self::get_node())).id();\n
+            let mut me = commands.entity(entity);\n
+            Self::spawn_children(&mut me, &asset_server);\n
+            Self::apply_attributes(me, &asset_server);\n
+        }}\n
+        {root_visibility}fn spawn<'a>(parent: &'a mut ChildBuilder<'_>, asset_server: &'a Res<AssetServer>) -> EntityCommands<'a> {{\n
+            let mut me = Self::apply_attributes(\n
+                parent.spawn((Self, Self::get_node())),\n
+                asset_server\n
+            );\n
+            Self::spawn_children(&mut me, asset_server);\n
+            me\n
+        }}\n
+        {root_visibility}fn spawn_children(me: &mut EntityCommands<'_>, asset_server: &Res<AssetServer>) {{\n
+            me.with_children(|parent| {{\n");
+    
 
     while tokens
         .clone()
@@ -326,13 +354,14 @@ fn parse_body(tokens: &mut Peekable<token_stream::IntoIter>, implemented_classes
         let tag_result = parse_tag(tokens, implemented_classes)?;
         result.push_str(&tag_result);
     }
-    assert_next_end_tag(tokens, "body")?;
+    assert_next_end_tag(tokens, root_tag)?;
     result.push_str("});\n}\n}");
 
     Ok(result)
 }
+#[allow(clippy::too_many_lines)]
 fn parse_tag(
-    tokens: &mut Peekable<impl Iterator<Item = TokenTree> + Clone>, implemented_classes: &Vec<ClassName>
+    tokens: &mut Peekable<impl Iterator<Item = TokenTree> + Clone>, implemented_classes: &Vec<&str>
 ) -> Result<String, TokenStream> {
     let mut result = String::new();
 
@@ -363,30 +392,45 @@ fn parse_tag(
     } else {
         (None, None)
     };
-    assert_next_token!(tokens, Punct, ">", Err);
-    if peek_matches_token!(tokens, Literal) || peek_matches_token!(tokens, Punct, "<") {
-        let (apply_classes, end_parenthesis) = if let Some(classes) = classes {
-            let (mut apply_classes, mut end_parenthesis) = (String::new(), String::new());
-            for class in classes {
-                if !implemented_classes.contains(&class) {
-                    return Err(format_compile_error!("Class \\\"{class}\\\" does not exist"));
-                }
+    let is_self_closing = match tokens.next() {
+        Some(TokenTree::Punct(punct)) if [">", "/"].contains(&punct.to_string().as_ref()) => {
+            punct.to_string() == "/"
+        },
+        _ => {return Err(format_compile_error!("Expected > or /{}.", struct_name.map_or_else(String::new, |struct_name| format!(" after {struct_name}"))));}
+    };
 
-                apply_classes.push_str(&format!("apply_{class}_class!("));
-                end_parenthesis.push(')');
+    let (apply_classes, end_parenthesis) = if let Some(classes) = classes {
+        let (mut apply_classes, mut end_parenthesis) = (String::new(), String::new());
+        for class in classes {
+            if !implemented_classes.contains(&class.as_ref()) {
+                return Err(format_compile_error!("Class \\\"{class}\\\" does not exist"));
             }
 
-            (apply_classes, end_parenthesis)
-        } else {
-            (String::new(), String::new())
-        };
+            apply_classes.push_str(&format!("apply_{class}_class!("));
+            end_parenthesis.push(')');
+        }
+
+        (apply_classes, end_parenthesis)
+    } else {
+        (String::new(), String::new())
+    };
+
+    if is_self_closing {
+        let Some(struct_name) = struct_name else { return Err(format_compile_error!("Self closing tag must have a name"))};
+        result.push_str(&format!(
+            "{struct_name}::apply_attributes({apply_classes}{struct_name}::spawn(parent, asset_server){end_parenthesis}, &asset_server)"
+        ));
+    } else {
+        if !(peek_matches_token!(tokens, Literal) || peek_matches_token!(tokens, Punct, "<")) {
+            return Err(format_compile_error!("Expected end tag"));
+        }
 
         result.push_str(&struct_name.as_ref().map_or_else(
             || format!("{apply_classes}parent.spawn(Node::default()){end_parenthesis}"),
             |struct_name| {
                 
                 format!(
-                    "{struct_name}::apply_attributes({apply_classes}{struct_name}::spawn(parent){end_parenthesis}, &asset_server)"
+                    "{struct_name}::apply_attributes({apply_classes}{struct_name}::spawn_as_child(parent){end_parenthesis}, &asset_server)"
                 )
             },
         ));
@@ -411,7 +455,6 @@ fn parse_tag(
             }
             result.push_str("})");
         }
-        result.push(';');
         assert_next_token!(tokens, Punct, "<", Err);
         assert_next_token!(tokens, Punct, "/", Err);
         if peek_matches_token!(tokens, Ident) {
@@ -422,14 +465,14 @@ fn parse_tag(
             {
                 return Err(format_compile_error!(
                     "Expected </{}>",
-                    struct_name.unwrap_or_default().to_case(Case::Kebab)
+                    struct_name.unwrap_or_default()
                 ));
             }
         }
-        assert_next_token!(tokens, Punct, ">", Err);
-    } else {
-        return Err(format_compile_error!("Expected end tag"));
+        
     }
+    result.push(';');
+    assert_next_token!(tokens, Punct, ">", Err);
 
     Ok(result)
 }
