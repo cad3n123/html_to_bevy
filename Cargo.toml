@@ -17,4 +17,4 @@ version = "0.8.0"
 default = []
 
 [dependencies]
-convert_case = "0.8.0"
+convert_case = "0.7.0"
