@@ -11,10 +11,10 @@ license = "MIT"
 name = "html_to_bevy"
 readme = "README.md"
 repository = "https://github.com/cad3n123/html_to_bevy/tree/main"
-version = "0.8.0"
+version = "0.7.0"
 
 [features]
 default = []
 
 [dependencies]
-convert_case = "0.7.0"
+convert_case = "0.8.0"
