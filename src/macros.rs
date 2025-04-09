@@ -12,10 +12,15 @@ macro_rules! assert_next_string_lit {
     }};
 }
 macro_rules! assert_next_token {
-    ($tokens:ident, $($args:tt)*) => {
-        {assert_peek_token!($tokens, $($args)*);
-        $tokens.next().unwrap()}
-    }
+    ($tokens:ident, $($args:tt)*) => {{
+        assert_peek_token!($tokens, $($args)*);
+        if let Some(token) = $tokens.next() {
+            token
+        } else {
+            return Err(format_compile_error!("Unreachable 2"))
+        }
+        
+    }}
 }
 macro_rules! assert_peek_token {
     ($tokens:ident, $tree:ident, $err:expr) => {
@@ -97,9 +102,13 @@ macro_rules! collect_until_token {
     ($tokens:ident, $($args:tt)*) => {{
         let mut collected = String::new();
         while $tokens.peek().is_some() && !peek_matches_token!($tokens, $($args)*) {
-            collected.push_str(unsafe {
-                &$tokens.next().unwrap_unchecked().to_string()
-            });
+            collected.push_str(
+                &(if let Some(token) = $tokens.next() {
+                    token.to_string()
+                } else {
+                    return Err(format_compile_error!("Unreachable 1"))
+                })
+            );
         }
         collected
     }};
