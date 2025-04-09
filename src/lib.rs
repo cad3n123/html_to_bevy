@@ -1,4 +1,4 @@
-use convert_case::{Case, Casing};
+
 use proc_macro::{token_stream, Delimiter, TokenStream, TokenTree};
 use std::iter::Peekable;
 
@@ -676,7 +676,7 @@ fn parse_tag(
         assert_next_token!(tokens, Punct, "<", Err);
         assert_next_token!(tokens, Punct, "/", Err);
         if peek_matches_token!(tokens, Ident) {
-            let tag = collect_until_token!(tokens, Punct, ">").to_case(Case::Pascal);
+            let tag = collect_until_token!(tokens, Punct, ">");
             if struct_name
                 .clone()
                 .is_none_or(|struct_name| tag != struct_name)
