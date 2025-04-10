@@ -477,6 +477,7 @@ fn implement_styles(styles: &StyleInfo) -> String {
             #[allow(unused_macros)]
             macro_rules! {macro_name} {{\n
                 ($element:expr, $asset_server:ident, $attributes:ident) => {{{{\n
+                    #[allow(unused_variables)]
                     let asset_server = &$asset_server;
                     {vars}
                     #[allow(unused_mut)]
@@ -535,18 +536,18 @@ fn parse_root(
             let entity = commands.spawn((Self, Self::get_node(&attributes){literal_value_code})).id();\n
             let mut me = commands.entity(entity);\n
             Self::spawn_children(&mut me, &asset_server, &attributes);\n
-            Self::apply_attributes({apply_classes}me{apply_classes_end}, &asset_server, &attributes);\n
+            {apply_classes}Self::apply_attributes(me, &asset_server, &attributes){apply_classes_end};\n
         }}\n
         {root_visibility}fn spawn<'a>(parent: &'a mut ChildBuilder<'_>, asset_server: &'a Res<AssetServer>, new_attributes: &std::collections::HashMap<String,String>) -> EntityCommands<'a> {{\n
             let mut attributes: std::collections::HashMap<String, String> = std::collections::HashMap::from([{attribute_tuples}]);\n
             for (k, v) in new_attributes {{\n
                 attributes.insert(k.clone(), v.clone());\n
             }}\n
-            let mut me = Self::apply_attributes(\n
-                {apply_classes}parent.spawn((Self, Self::get_node(&attributes){literal_value_code})){apply_classes_end},\n
+            let mut me = {apply_classes}Self::apply_attributes(\n
+                parent.spawn((Self, Self::get_node(&attributes){literal_value_code})),\n
                 asset_server,\n
                 &attributes,\n
-            );\n
+            ){apply_classes_end};\n
             Self::spawn_children(&mut me, asset_server, &attributes);\n
             me\n
         }}\n
@@ -632,7 +633,7 @@ fn parse_tag(
             for (k, v) in new_attributes {{\n
                 attributes.insert(k.clone(), v.clone());\n
             }}\n
-            {struct_name}::apply_attributes({apply_classes}{struct_name}::spawn(parent, asset_server, &attributes){apply_classes_end}, asset_server, &attributes)\n
+            {apply_classes}{struct_name}::apply_attributes({struct_name}::spawn(parent, asset_server, &attributes), asset_server, &attributes){apply_classes_end}\n
         }};"));
     } else {
         // Potentially has children
@@ -648,7 +649,7 @@ fn parse_tag(
                     for (k, v) in new_attributes {{\n
                         attributes.insert(k.clone(), v.clone());\n
                     }}\n
-                    {struct_name}::apply_attributes({apply_classes}{struct_name}::spawn_as_child(parent, &attributes){apply_classes_end}, asset_server, &attributes)")
+                    {apply_classes}{struct_name}::apply_attributes({struct_name}::spawn_as_child(parent, &attributes), asset_server, &attributes){apply_classes_end}")
             },
         ));
         if let Some(TokenTree::Literal(literal)) = tokens.peek() {
