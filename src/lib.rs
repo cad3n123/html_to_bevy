@@ -1,4 +1,3 @@
-
 use proc_macro::{token_stream, Delimiter, TokenStream, TokenTree};
 use std::iter::Peekable;
 
@@ -240,16 +239,15 @@ fn parse_head(tokens: &mut Peekable<token_stream::IntoIter>) -> Result<StyleInfo
                 TokenTree::Ident(ident) if ident.to_string() == "pub" => {
                     let ident = ident.to_string();
                     tokens.next();
-                    visibility = {
-                        if peek_matches_token!(tokens, Group, Delimiter::Parenthesis) {
-                            let Some(visibility_inside) = tokens.next() else {
-                                return Err(format_compile_error!("Unreachable 4"));
-                            };
-
-                            Some(format!("{ident}{visibility_inside}"))
-                        } else {
-                            Some(ident)
+                    visibility = match tokens.peek() {
+                        Some(TokenTree::Group(group))
+                            if group.delimiter() == Delimiter::Parenthesis =>
+                        {
+                            let group = group.to_string();
+                            tokens.next();
+                            Some(format!("{ident}{group}"))
                         }
+                        _ => Some(ident),
                     }
                 }
                 // Tag
@@ -336,27 +334,31 @@ fn parse_style_attribute(
             || (group_tokens.peek().is_some() && !peek_matches_token!(group_tokens, Punct, ";"))
         {
             let tokens = token_stack.last_mut().unwrap_or(group_tokens);
-            if peek_matches_token!(tokens, Group) {
-                let Some(TokenTree::Group(group)) = tokens.next() else {
-                    return Err(format_compile_error!("Unreachable 5"));
-                };
-                let delimiter = group.delimiter();
-                group_delimiter_stack.push(delimiter);
-                collected.push(delimiter_to_chars(delimiter).0);
+            let Some(next_token) = tokens.peek() else {
+                unreachable!()
+            };
+            match next_token {
+                TokenTree::Group(group) => {
+                    let delimiter = group.delimiter();
+                    group_delimiter_stack.push(delimiter);
+                    collected.push(delimiter_to_chars(delimiter).0);
 
-                token_stack.push(group.stream().into_iter().peekable());
-            } else if peek_matches_token!(tokens, Punct, "$") {
-                tokens.next();
-                let var = assert_next_token!(tokens, Ident, Err);
-                collected.push_str(&format!(
-                    "{attributes_prefix}attributes.get(\"{var}\").unwrap_or(&{var})"
-                ));
-            } else {
-                collected.push_str(&if let Some(token) = tokens.next() {
-                    token.to_string()
-                } else {
-                    return Err(format_compile_error!("Unreachable 6"));
-                });
+                    let group_tokens = group.stream().into_iter().peekable();
+                    tokens.next();
+                    token_stack.push(group_tokens);
+                }
+                TokenTree::Punct(punct) if punct.as_char() == '$' => {
+                    tokens.next();
+                    let var = assert_next_token!(tokens, Ident, Err);
+                    collected.push_str(&format!(
+                        "{attributes_prefix}attributes.get(\"{var}\").unwrap_or(&{var})"
+                    ));
+                }
+                token => {
+                    let token = token.to_string();
+                    tokens.next();
+                    collected.push_str(&token);
+                }
             }
             while token_stack
                 .last_mut()
@@ -585,12 +587,8 @@ fn parse_tag(
     let mut result = String::new();
 
     assert_next_token!(tokens, Punct, "<", Err);
-    let (struct_name, classes, attributes) = if peek_matches_token!(tokens, Ident) {
-        let ident = if let Some(token) = tokens.peek() {
-            token.to_string()
-        } else {
-            return Err(format_compile_error!("Unreachable 7"));
-        };
+    let (struct_name, classes, attributes) = if let Some(TokenTree::Ident(ident)) = tokens.peek() {
+        let ident = ident.to_string();
         let struct_name = if tokens
             .clone()
             .nth(1)
@@ -649,10 +647,9 @@ fn parse_tag(
                     {struct_name}::apply_attributes({apply_classes}{struct_name}::spawn_as_child(parent){apply_classes_end}, asset_server, &attributes)")
             },
         ));
-        if peek_matches_token!(tokens, Literal) {
-            let Some(literal) = tokens.next() else {
-                return Err(format_compile_error!("Unreachable 8"));
-            };
+        if let Some(TokenTree::Literal(literal)) = tokens.peek() {
+            let literal = literal.to_string();
+            tokens.next();
             result.push_str(&format!(".insert(Text::from({literal}));"));
         } else {
             result.push_str(".with_children(|parent| {\n");

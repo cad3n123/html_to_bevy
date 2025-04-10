@@ -17,9 +17,8 @@ macro_rules! assert_next_token {
         if let Some(token) = $tokens.next() {
             token
         } else {
-            return Err(format_compile_error!("Unreachable 2"))
+            unreachable!();
         }
-        
     }}
 }
 macro_rules! assert_peek_token {
@@ -101,14 +100,15 @@ macro_rules! format_compile_error {
 macro_rules! collect_until_token {
     ($tokens:ident, $($args:tt)*) => {{
         let mut collected = String::new();
-        while $tokens.peek().is_some() && !peek_matches_token!($tokens, $($args)*) {
-            collected.push_str(
-                &(if let Some(token) = $tokens.next() {
-                    token.to_string()
-                } else {
-                    return Err(format_compile_error!("Unreachable 1"))
-                })
-            );
+        while let Some(token) = $tokens.peek() {
+            let token = token.to_string();
+
+            if peek_matches_token!($tokens, $($args)*) {
+                break;
+            }
+
+            $tokens.next();
+            collected.push_str(&token);
         }
         collected
     }};
