@@ -420,19 +420,20 @@ fn implement_styles(styles: &StyleInfo) -> String {
             impl {struct_name} {{\n
                 #![allow(unused_variables)]\n
 
-                {visibility}fn spawn_as_child<'a>(parent: &'a mut ChildBuilder<'_>) -> EntityCommands<'a> {{\n
-                    parent.spawn((Self, Self::get_node()))
+                {visibility}fn spawn_as_child<'a>(parent: &'a mut ChildBuilder<'_>, attributes: &std::collections::HashMap<String,String>) -> EntityCommands<'a> {{\n
+                    parent.spawn((Self, Self::get_node(attributes)))\n
                 }}\n
 
-                {visibility}fn get_node() -> Node {{\n
-                    {node}
+                {visibility}fn get_node(attributes: &std::collections::HashMap<String,String>) -> Node {{\n
+                    {vars}\n
+                    {node}\n
                 }}\n
 
                 {visibility}fn apply_attributes<'a>(mut me: EntityCommands<'a>, asset_server: &'a Res<AssetServer>, attributes: &std::collections::HashMap<String,String>) -> EntityCommands<'a> {{\n
-                    {vars}
-                    {attributes}
+                    {vars}\n
+                    {attributes}\n
                     me\n
-                }}
+                }}\n
             }}"
         ));
     }
@@ -531,7 +532,7 @@ fn parse_root(
     impl {root_tag}{{\n
         {root_visibility}fn spawn_as_root(mut commands: Commands, asset_server: Res<AssetServer>) {{\n
             let attributes: std::collections::HashMap<String, String> = std::collections::HashMap::from([{attribute_tuples}]);\n
-            let entity = commands.spawn((Self, Self::get_node(){literal_value_code})).id();\n
+            let entity = commands.spawn((Self, Self::get_node(&attributes){literal_value_code})).id();\n
             let mut me = commands.entity(entity);\n
             Self::spawn_children(&mut me, &asset_server, attributes.clone());\n
             Self::apply_attributes({apply_classes}me{apply_classes_end}, &asset_server, &attributes);\n
@@ -542,7 +543,7 @@ fn parse_root(
                 attributes.insert(k.clone(), v.clone());\n
             }}\n
             let mut me = Self::apply_attributes(\n
-                {apply_classes}parent.spawn((Self, Self::get_node(){literal_value_code})){apply_classes_end},\n
+                {apply_classes}parent.spawn((Self, Self::get_node(&attributes){literal_value_code})){apply_classes_end},\n
                 asset_server,\n
                 &attributes,\n
             );\n
@@ -644,7 +645,7 @@ fn parse_tag(
                     for (k, v) in &std::collections::HashMap::<String, String>::from([{attribute_tuples}]) {{\n
                         attributes.insert(k.clone(), v.clone());\n
                     }}\n
-                    {struct_name}::apply_attributes({apply_classes}{struct_name}::spawn_as_child(parent){apply_classes_end}, asset_server, &attributes)")
+                    {struct_name}::apply_attributes({apply_classes}{struct_name}::spawn_as_child(parent, &attributes){apply_classes_end}, asset_server, &attributes)")
             },
         ));
         if let Some(TokenTree::Literal(literal)) = tokens.peek() {
