@@ -330,6 +330,7 @@ fn parse_style_attribute(
     let mut group_delimiter_stack = vec![];
     let attribute = {
         let mut collected = String::new();
+        let mut last_was_ident = false;
         while token_stack.last().is_some()
             || (group_tokens.peek().is_some() && !peek_matches_token!(group_tokens, Punct, ";"))
         {
@@ -355,6 +356,15 @@ fn parse_style_attribute(
                     ));
                 }
                 token => {
+                    if let TokenTree::Ident(_) = token {
+                        if last_was_ident {
+                            collected.push(' ');
+                        }
+                        last_was_ident = true;
+                    } else {
+                        last_was_ident = false;
+                    }
+
                     let token = token.to_string();
                     tokens.next();
                     collected.push_str(&token);
