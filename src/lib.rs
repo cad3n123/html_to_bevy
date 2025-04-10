@@ -534,7 +534,7 @@ fn parse_root(
             let attributes: std::collections::HashMap<String, String> = std::collections::HashMap::from([{attribute_tuples}]);\n
             let entity = commands.spawn((Self, Self::get_node(&attributes){literal_value_code})).id();\n
             let mut me = commands.entity(entity);\n
-            Self::spawn_children(&mut me, &asset_server, attributes.clone());\n
+            Self::spawn_children(&mut me, &asset_server, &attributes);\n
             Self::apply_attributes({apply_classes}me{apply_classes_end}, &asset_server, &attributes);\n
         }}\n
         {root_visibility}fn spawn<'a>(parent: &'a mut ChildBuilder<'_>, asset_server: &'a Res<AssetServer>, new_attributes: &std::collections::HashMap<String,String>) -> EntityCommands<'a> {{\n
@@ -547,10 +547,10 @@ fn parse_root(
                 asset_server,\n
                 &attributes,\n
             );\n
-            Self::spawn_children(&mut me, asset_server, attributes);\n
+            Self::spawn_children(&mut me, asset_server, &attributes);\n
             me\n
         }}\n
-        {root_visibility}fn spawn_children(me: &mut EntityCommands<'_>, asset_server: &Res<AssetServer>, attributes: std::collections::HashMap<String,String>) {{\n
+        {root_visibility}fn spawn_children(me: &mut EntityCommands<'_>, asset_server: &Res<AssetServer>, new_attributes: &std::collections::HashMap<String,String>) {{\n
             me.with_children(|parent| {{\n");
     if !is_literal {
         while tokens
@@ -628,7 +628,10 @@ fn parse_tag(
             return Err(format_compile_error!("Self closing tag must have a name"));
         };
         result.push_str(&format!("{{\n
-            let attributes: std::collections::HashMap<String, String> = std::collections::HashMap::<String, String>::from([{attribute_tuples}]);\n
+            let mut attributes: std::collections::HashMap<String, String> = std::collections::HashMap::<String, String>::from([{attribute_tuples}]);\n
+            for (k, v) in new_attributes {{\n
+                attributes.insert(k.clone(), v.clone());\n
+            }}\n
             {struct_name}::apply_attributes({apply_classes}{struct_name}::spawn(parent, asset_server, &attributes){apply_classes_end}, asset_server, &attributes)\n
         }};"));
     } else {
@@ -641,8 +644,8 @@ fn parse_tag(
             || format!("{{{apply_classes}parent.spawn(Node::default()){apply_classes_end}"),
             |struct_name| {
                 format!("{{\n
-                    let mut attributes = attributes.clone();\n
-                    for (k, v) in &std::collections::HashMap::<String, String>::from([{attribute_tuples}]) {{\n
+                    let mut attributes = std::collections::HashMap::<String, String>::from([{attribute_tuples}]);\n
+                    for (k, v) in new_attributes {{\n
                         attributes.insert(k.clone(), v.clone());\n
                     }}\n
                     {struct_name}::apply_attributes({apply_classes}{struct_name}::spawn_as_child(parent, &attributes){apply_classes_end}, asset_server, &attributes)")
